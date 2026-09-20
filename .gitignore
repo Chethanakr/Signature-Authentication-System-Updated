@@ -8,7 +8,6 @@ __pycache__/
 neural-frontend/node_modules/
 
 # Large Model Weights (Keep code clean; store weights via Google Drive/Release assets)
-*.pth
 
 # Build outputs & logs
 neural-frontend/dist/
