@@ -7,6 +7,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from model import SiameseResNet18
+from preprocess import preprocess_signature
 
 app = FastAPI(title="Signature Verification API")
 
@@ -22,11 +23,11 @@ app.add_middleware(
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = SiameseResNet18(embedding_dim=128).to(device)
 
-WEIGHTS_PATH = "weights/best_siamese_resnet18.pth"
+WEIGHTS_PATH = "signature_siamese_resnet18.pth"  # matches train_colab.py's save path exactly
 model.load_state_dict(torch.load(WEIGHTS_PATH, map_location=device))
 model.eval()
 
-OPTIMAL_THRESHOLD = 1.3671
+OPTIMAL_THRESHOLD = 0.2290  # from this training run's EER computation (3.65% EER)
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -42,6 +43,14 @@ async def verify_signatures(file1: UploadFile = File(...), file2: UploadFile = F
 
         img1 = Image.open(io.BytesIO(bytes1)).convert('L')
         img2 = Image.open(io.BytesIO(bytes2)).convert('L')
+
+        # Match training-time preprocessing: binarize, crop to the ink
+        # bounding box, and resize without warping aspect ratio. Skipping
+        # this step is what causes real-world uploads (with background,
+        # shadows, non-square crops) to look "far apart" from genuine
+        # pairs even when the signature itself matches.
+        img1 = preprocess_signature(img1)
+        img2 = preprocess_signature(img2)
 
         t1 = transform(img1).unsqueeze(0).to(device)
         t2 = transform(img2).unsqueeze(0).to(device)
